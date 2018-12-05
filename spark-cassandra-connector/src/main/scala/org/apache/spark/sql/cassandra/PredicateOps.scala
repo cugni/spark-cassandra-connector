@@ -27,6 +27,16 @@ trait PredicateOps[Predicate] {
 
   /** Returns true for predicates of type: column IN (value1, value2, ...) */
   def isInPredicate(p: Predicate): Boolean
+
+  //QUAKE
+  def isLessThanPredicate(p: Predicate) : Boolean
+
+  def isLessThanOrEqualPredicate(p: Predicate) : Boolean
+
+  def isGreaterThanPredicate(p: Predicate) : Boolean
+
+  def isGreaterThanOrEqualPredicate(p: Predicate) : Boolean
+
 }
 
 /** Provides `PredicateOps` adapters for Expression and Filter classes */
@@ -40,6 +50,7 @@ object PredicateOps {
       p.references.head.name
     }
 
+
     override def isSingleColumnPredicate(p: Expression): Boolean =
       p.references.size == 1
 
@@ -51,11 +62,27 @@ object PredicateOps {
       case _ => false
     }
 
+
+
     override def isEqualToPredicate(p: Expression): Boolean =
       p.isInstanceOf[expressions.EqualTo]
 
     override def isInPredicate(p: Expression): Boolean =
       p.isInstanceOf[expressions.In] || p.isInstanceOf[expressions.InSet]
+
+
+    //isjbfdljhwbefb
+    override def isLessThanOrEqualPredicate(p: Expression): Boolean =
+      p.isInstanceOf[expressions.LessThanOrEqual]
+
+    override def isLessThanPredicate(p: Expression): Boolean =
+      p.isInstanceOf[expressions.LessThan]
+
+    override def isGreaterThanPredicate(p: Expression): Boolean =
+      p.isInstanceOf[expressions.GreaterThan]
+
+    override def isGreaterThanOrEqualPredicate(p: Expression): Boolean =
+      p.isInstanceOf[expressions.GreaterThanOrEqual]
 
   }
 
@@ -89,5 +116,21 @@ object PredicateOps {
 
     override def isInPredicate(p: Filter): Boolean =
       p.isInstanceOf[sources.In]
+
+
+
+    //QUAKE
+    override def isLessThanOrEqualPredicate(p: Filter): Boolean =
+      p.isInstanceOf[sources.LessThanOrEqual]
+
+    override def isLessThanPredicate(p: Filter): Boolean =
+      p.isInstanceOf[sources.LessThan]
+
+    override def isGreaterThanPredicate(p: Filter): Boolean =
+      p.isInstanceOf[sources.GreaterThan]
+
+    override def isGreaterThanOrEqualPredicate(p: Filter): Boolean =
+      p.isInstanceOf[sources.GreaterThanOrEqual]
+
   }
 }

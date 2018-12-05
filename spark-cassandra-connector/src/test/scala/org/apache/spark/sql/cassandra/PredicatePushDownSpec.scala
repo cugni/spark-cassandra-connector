@@ -28,6 +28,12 @@ class PredicatePushDownSpec extends FlatSpec with Matchers {
     override def isSingleColumnPredicate(p: Filter) = p != UnsupportedFilter
     override def isEqualToPredicate(p: Filter) = p.isInstanceOf[EqFilter]
     override def isInPredicate(p: Filter) = p.isInstanceOf[InFilter]
+
+    //QUAKE
+    override def isLessThanPredicate(p: Filter) = p.isInstanceOf[LtFilter]
+    override def isGreaterThanPredicate(p: Filter) = p.isInstanceOf[GtFilter]
+    override def isGreaterThanOrEqualPredicate(p: Filter) = p.isInstanceOf[GtFilter]
+    override def isLessThanOrEqualPredicate(p: Filter) = p.isInstanceOf[LtFilter]
   }
 
   val pk1 = ColumnDef("pk1", PartitionKeyColumn, IntType)

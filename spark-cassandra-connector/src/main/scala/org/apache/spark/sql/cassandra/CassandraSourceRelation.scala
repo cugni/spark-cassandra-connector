@@ -121,6 +121,7 @@ private[cassandra] class CassandraSourceRelation(
 
     /** Apply built in rules **/
     val bcpp = new BasicCassandraPredicatePushDown(filters.toSet, tableDef, pv)
+    //predicatesToPushdown must contain queries with x, y, z
     val basicPushdown = AnalyzedPredicates(bcpp.predicatesToPushDown, bcpp.predicatesToPreserve)
     logDebug(s"Basic Rules Applied:\n$basicPushdown")
 

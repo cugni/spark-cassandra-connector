@@ -10,6 +10,7 @@ import scala.collection.JavaConversions._
 import scala.language.existentials
 import scala.util.{Properties, Try}
 import com.datastax.driver.core._
+import com.datastax.spark.connector.cql.Schema.logDebug
 import com.datastax.spark.connector.types.{ColumnType, CounterType}
 import com.datastax.spark.connector.util.NameTools
 import com.datastax.spark.connector.util.Quote._
@@ -150,6 +151,29 @@ case class TableDef(
 
   private val indexesForTarget: Map[String, Seq[IndexDef]] = indexes.groupBy(_.target)
 
+//QUAKE
+
+  //it can be done with a Class expression for matching multiple targets instead of
+  //hardcoding the class name
+
+  private val qbeastIndex: Seq[IndexDef] = indexes
+    .filter(_.className.equals("es.bsc.qbeast.index.QbeastIndex"))
+
+
+  private val qbeastIndexForTarget: Seq[(String, Seq[IndexDef])] = {
+    qbeastIndex.flatMap{
+      case (index) => index.target.split("\\s*,\\s*").map{ a => (a, Seq(index))}
+
+    }
+  }
+
+  private val qbeastIndexForColumnDef: Seq[(ColumnDef, Seq[IndexDef])] = {
+    qbeastIndexForTarget.flatMap {
+      case (target, indexes) => Try(columnByName(target) -> indexes).toOption
+    }
+  }
+
+
   /**
     * Contains indices that can be directly mapped to single column, namely indices with a handled column
     * name as a target. Indices that can not be mapped to a single column are dropped.
@@ -159,6 +183,8 @@ case class TableDef(
       case (target, indexes) => Try(columnByName(target) -> indexes).toOption
     }
   }
+
+
 
   def isIndexed(column: String): Boolean = {
     indexesForTarget.contains(column)
@@ -171,6 +197,14 @@ case class TableDef(
   val indexedColumns: Seq[ColumnDef] = {
     indexesForColumnDef.keys.toSeq
   }
+
+  //QUAKE
+  val qbeastColumns: Seq[ColumnDef] = {
+    qbeastIndexForColumnDef.map(_._1)
+
+  }
+
+
 
   override type Column = ColumnDef
 

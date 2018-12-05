@@ -4,6 +4,7 @@ import com.datastax.driver.core.ProtocolVersion
 import com.datastax.driver.core.ProtocolVersion._
 import com.datastax.spark.connector.cql.TableDef
 import com.datastax.spark.connector.types.TimeUUIDType
+import org.apache.spark.sql.catalyst.expressions
 
 /**
  *  Determines which filter predicates can be pushed down to Cassandra.
@@ -44,7 +45,10 @@ class BasicCassandraPredicatePushDown[Predicate : PredicateOps](
   private val allColumns = partitionKeyColumns ++ clusteringColumns ++ regularColumns
   private val indexedColumns = table.indexedColumns.map(_.columnName)
 
+
+
   private val singleColumnPredicates = predicates.filter(Predicates.isSingleColumnPredicate)
+
 
   private val eqPredicates = singleColumnPredicates.filter(Predicates.isEqualToPredicate)
   private val eqPredicatesByName =
@@ -65,6 +69,15 @@ class BasicCassandraPredicatePushDown[Predicate : PredicateOps](
     rangePredicates
       .groupBy(Predicates.columnName)
       .withDefaultValue(Set.empty)
+
+
+  //wdiwueigfue
+  /*private val doubleRangePredicates = singleColumnPredicates.filter(Predicates.isLessPredicate && Predicates.isGreatPredicate)
+  private val doubleRangePredicatesByName =
+    doubleRangePredicates
+    .groupBy(Predicates.columnName)
+    .withDefaultValue(Set.empy)*/
+
 
   /** Returns a first non-empty set. If not found, returns an empty set. */
   private def firstNonEmptySet[T](sets: Set[T]*): Set[T] =
@@ -167,7 +180,7 @@ class BasicCassandraPredicatePushDown[Predicate : PredicateOps](
     val eqIndexedPredicates = eqIndexedColumns
       .filter{ c => pv >= V4 || !partitionKeyColumns.contains(c)}
       .flatMap(eqPredicatesByName)
-
+eqPredicatesByName
     // Don't include partition predicates in nonIndexedPredicates if partition predicates can't
     // be pushed down because we use token range query which already has partition columns in the
     // where clause and it can't have other partial partition columns in where clause any more.
@@ -184,11 +197,31 @@ class BasicCassandraPredicatePushDown[Predicate : PredicateOps](
       Set.empty
   }
 
+  private val qbeast = table.qbeastColumns.map(_.columnName)
+  /** Returns the set of predicates that contains doubleranges for the index qBeasts*/
+  private val qbeastPredicatesToPushdown: Set[Predicate] = {
+
+
+    val doubleRange = rangePredicatesByName.filter(p => p._2.exists(Predicates.isLessThanPredicate)
+       && p._2.exists(Predicates.isGreaterThanOrEqualPredicate))
+
+
+     if (qbeast.toSet subsetOf doubleRange.keySet) {
+       val eqQbeast = qbeast.flatMap(rangePredicatesByName)
+       eqQbeast.toSet
+     }
+
+     else
+       Set.empty
+
+  }
   /** Returns the set of predicates that can be safely pushed down to Cassandra */
   val predicatesToPushDown: Set[Predicate] =
     partitionKeyPredicatesToPushDown ++
       clusteringColumnPredicatesToPushDown ++
-      indexedColumnPredicatesToPushDown
+      indexedColumnPredicatesToPushDown ++
+      qbeastPredicatesToPushdown
+
 
   /** Returns the set of predicates that cannot be pushed down to Cassandra,
     * so they must be applied by Spark  */
