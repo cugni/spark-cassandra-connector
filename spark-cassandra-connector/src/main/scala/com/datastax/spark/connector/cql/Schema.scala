@@ -157,7 +157,7 @@ case class TableDef(
   //hardcoding the class name
 
   private val qbeastIndex: Seq[IndexDef] = indexes
-    .filter(_.className.equals("QbeastIndex"))
+    .filter(_.className.contains("QbeastIndex"))
 
 
   private val qbeastIndexForTarget: Seq[(String, Seq[IndexDef])] = {
