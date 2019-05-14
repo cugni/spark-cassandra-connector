@@ -18,7 +18,9 @@ import scala.util.Properties
 object Versions {
 
 
-  lazy val scalaVersion = "2.11.8"//one less than the connector
+
+  lazy val scalaVersion = "2.11.12"
+
 
   /* For `scalaBinaryVersion.value outside an sbt task. */
   lazy val scalaBinary = scalaVersion.dropRight(2)
@@ -52,7 +54,9 @@ object Versions {
   // and install in a local Maven repository. This is all done automatically, however it will work
   // only on Unix/OSX operating system. Windows users have to build and install Spark manually if the
   // desired version is not yet published into a public Maven repository.
-  val Spark           = "2.4.1"
+
+  val Spark           = "2.4.0"
+
   val SparkJetty      = "8.1.14.v20131031"
   val JSR166e         = "1.1.0"
   val Airlift         = "0.6"
