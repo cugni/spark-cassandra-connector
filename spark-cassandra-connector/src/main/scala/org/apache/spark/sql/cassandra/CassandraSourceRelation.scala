@@ -12,14 +12,21 @@ import com.datastax.spark.connector.util.Quote._
 import com.datastax.spark.connector.util.{ConfigParameter, Logging, ReflectionUtil}
 import com.datastax.spark.connector.writer.{SqlRowWriter, WriteConf}
 import com.datastax.spark.connector.{SomeColumns, _}
+import javax.swing.JList
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.cassandra.CassandraSQLRow.CassandraSQLRowReader
 import org.apache.spark.sql.cassandra.DataTypeConverter._
+import org.apache.spark.sql.cassandra.DefaultSource.CassandraQbeastSamplingEnabled
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.plans.logical.Sample
+import org.apache.spark.sql.sources.v2.reader.{DataSourceReader, InputPartition, SupportsPushDownSampling}
 import org.apache.spark.sql.sources._
+import org.apache.spark.sql.sources.v2.{DataSourceOptions, DataSourceV2, ReadSupport}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext, sources}
 import org.apache.spark.unsafe.types.UTF8String
+
 
 /**
  * Implements [[BaseRelation]]]], [[InsertableRelation]]]] and [[PrunedFilteredScan]]]]
@@ -32,6 +39,7 @@ private[cassandra] class CassandraSourceRelation(
     userSpecifiedSchema: Option[StructType],
     filterPushdown: Boolean,
     confirmTruncate: Boolean,
+    sampling: Boolean,
     tableSizeInBytes: Option[Long],
     connector: CassandraConnector,
     readConf: ReadConf,
@@ -41,7 +49,10 @@ private[cassandra] class CassandraSourceRelation(
   extends BaseRelation
   with InsertableRelation
   with PrunedFilteredScan
-  with Logging {
+  with Logging
+  with PushDownSampling {
+
+  private var sampleFraction = 1.0
 
   private[this] val tableDef = Schema.tableFromCassandra(
     connector,
@@ -121,7 +132,10 @@ private[cassandra] class CassandraSourceRelation(
 
     /** Apply built in rules **/
     val bcpp = new BasicCassandraPredicatePushDown(filters.toSet, tableDef, pv)
-    //predicatesToPushdown must contain queries with x, y, z
+
+    //QUAKE
+    //predicatesToPushdown must contain queries with qbeast indexes
+
     val basicPushdown = AnalyzedPredicates(bcpp.predicatesToPushDown, bcpp.predicatesToPreserve)
     logDebug(s"Basic Rules Applied:\n$basicPushdown")
 
@@ -138,11 +152,14 @@ private[cassandra] class CassandraSourceRelation(
     finalPushdown
   }
 
+
+
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     val filteredRdd = {
       if(filterPushdown) {
         val pushdownFilters = predicatePushDown(filters).handledByCassandra.toArray
-        maybePushdownFilters(baseRdd, pushdownFilters)
+        val maybePushdown = maybePushdownFilters(baseRdd, pushdownFilters)
+        maybeSampling(maybePushdown)
       } else {
         baseRdd
       }
@@ -150,8 +167,10 @@ private[cassandra] class CassandraSourceRelation(
     maybeSelect(filteredRdd, requiredColumns)
   }
 
+
   /** Define a type for CassandraRDD[CassandraSQLRow]. It's used by following methods */
   private type RDDType = CassandraRDD[CassandraSQLRow]
+
 
   /** Transfer selection to limit to columns specified */
   private def maybeSelect(rdd: RDDType, requiredColumns: Array[String]) : RDD[Row] = {
@@ -176,6 +195,43 @@ private[cassandra] class CassandraSourceRelation(
       case _ => rdd
     }
   }
+
+  //QUAKE
+  //we have to implement the (void, for now) method on the V2 API source
+  override def pushSampling(sample: Sample): Boolean = {
+    sampleFraction = sample.fraction
+    sampling
+
+  }
+
+
+  //QUAKE
+  //here is where the expression is added to the where clause for sampling pourposes
+  private def maybeSampling(rdd: RDDType): RDDType = {
+    if (sampling) {
+      val index = tableDef.indexes.filter(_.className.contains("Qbeast"))
+
+      if(index.nonEmpty && sampleFraction!=1.0) {
+        val finalcql = s"""expr(${index.head.indexName}, """ +
+          s"""'precision=${sampleFraction}:${scala.util.Random.nextDouble()}')"""
+
+        val columns = tableDef.qbeastColumns.distinct
+        val filters = columns.map(c => s"""${c.columnName} >= 0 AND ${c.columnName} < ${Int.MaxValue}""")
+          .reduce(_ + s""" AND """ + _)
+
+        rdd.where(filters).where(finalcql)
+
+      }
+      else {
+        rdd
+      }
+    }
+
+    else {
+      rdd
+    }
+  }
+
 
   /** Construct Cql clause and retrieve the values from filter */
   private def filterToCqlAndValue(filter: Any): (String, Seq[Any]) = {
@@ -223,6 +279,7 @@ private[cassandra] class CassandraSourceRelation(
     val args = cqlValue.flatMap(_._2)
     (cql, args)
   }
+
 }
 
 object CassandraSourceRelation {
@@ -289,6 +346,8 @@ object CassandraSourceRelation {
       tableRef = tableRef,
       userSpecifiedSchema = schema,
       filterPushdown = options.pushdown,
+      //QUAKE
+      sampling = options.cassandraConfs.getOrElse(CassandraQbeastSamplingEnabled, "false").toBoolean,
       confirmTruncate = options.confirmTruncate,
       tableSizeInBytes = tableSizeInBytes,
       connector = cassandraConnector,

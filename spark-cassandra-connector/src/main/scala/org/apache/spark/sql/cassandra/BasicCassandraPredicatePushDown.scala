@@ -2,9 +2,11 @@ package org.apache.spark.sql.cassandra
 
 import com.datastax.driver.core.ProtocolVersion
 import com.datastax.driver.core.ProtocolVersion._
+import com.datastax.spark.connector.CassandraRowMetadata
 import com.datastax.spark.connector.cql.TableDef
 import com.datastax.spark.connector.types.TimeUUIDType
 import org.apache.spark.sql.catalyst.expressions
+import org.apache.spark.sql.sources.Filter
 
 /**
  *  Determines which filter predicates can be pushed down to Cassandra.
@@ -69,14 +71,6 @@ class BasicCassandraPredicatePushDown[Predicate : PredicateOps](
     rangePredicates
       .groupBy(Predicates.columnName)
       .withDefaultValue(Set.empty)
-
-
-  //wdiwueigfue
-  /*private val doubleRangePredicates = singleColumnPredicates.filter(Predicates.isLessPredicate && Predicates.isGreatPredicate)
-  private val doubleRangePredicatesByName =
-    doubleRangePredicates
-    .groupBy(Predicates.columnName)
-    .withDefaultValue(Set.empy)*/
 
 
   /** Returns a first non-empty set. If not found, returns an empty set. */
@@ -197,9 +191,12 @@ eqPredicatesByName
       Set.empty
   }
 
+  //QUAKE
+
   private val qbeast = table.qbeastColumns.map(_.columnName)
-  /** Returns the set of predicates that contains doubleranges for the index qBeasts*/
-  private val qbeastPredicatesToPushdown: Set[Predicate] = {
+  /** Returns the set of predicates that contains doubleranges for the index qBeast*/
+    //IT will be needed to check how is the cluster build to pushdown some of the filters and not all of them
+    val qbeastPredicatesToPushdown: Set[Predicate] = {
 
 
     val doubleRange = rangePredicatesByName.filter(p => p._2.exists(Predicates.isLessThanPredicate)
@@ -207,6 +204,7 @@ eqPredicatesByName
 
 
      if (qbeast.toSet subsetOf doubleRange.keySet) {
+
        val eqQbeast = qbeast.flatMap(rangePredicatesByName)
        eqQbeast.toSet
      }

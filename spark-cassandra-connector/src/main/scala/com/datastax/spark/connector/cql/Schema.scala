@@ -156,18 +156,18 @@ case class TableDef(
   //it can be done with a Class expression for matching multiple targets instead of
   //hardcoding the class name
 
-  private val qbeastIndex: Seq[IndexDef] = indexes
-    .filter(_.className.contains("QbeastIndex"))
+   val qbeastIndex: Seq[IndexDef] = indexes
+    .filter(_.className.contains("Qbeast"))
 
 
-  private val qbeastIndexForTarget: Seq[(String, Seq[IndexDef])] = {
+   val qbeastIndexForTarget: Map[String, Seq[IndexDef]] = {
     qbeastIndex.flatMap{
       case (index) => index.target.split("\\s*,\\s*").map{ a => (a, Seq(index))}
 
-    }
+    }.toMap
   }
 
-  private val qbeastIndexForColumnDef: Seq[(ColumnDef, Seq[IndexDef])] = {
+   val qbeastIndexForColumnDef: Map[ColumnDef, Seq[IndexDef]] = {
     qbeastIndexForTarget.flatMap {
       case (target, indexes) => Try(columnByName(target) -> indexes).toOption
     }
@@ -200,7 +200,7 @@ case class TableDef(
 
   //QUAKE
   val qbeastColumns: Seq[ColumnDef] = {
-    qbeastIndexForColumnDef.map(_._1)
+    qbeastIndexForColumnDef.keys.toSeq
 
   }
 

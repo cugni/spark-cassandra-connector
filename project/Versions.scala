@@ -55,7 +55,7 @@ object Versions {
   // only on Unix/OSX operating system. Windows users have to build and install Spark manually if the
   // desired version is not yet published into a public Maven repository.
 
-  val Spark           = "2.4.0"
+  val Spark           = "2.4.1"
 
   val SparkJetty      = "8.1.14.v20131031"
   val JSR166e         = "1.1.0"

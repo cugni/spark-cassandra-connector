@@ -118,6 +118,9 @@ object DefaultSource {
   val CassandraDataSourceProviderPackageName = DefaultSource.getClass.getPackage.getName
   val CassandraDataSourceProviderClassName = CassandraDataSourceProviderPackageName + ".DefaultSource"
 
+  //QBEAST
+  val CassandraQbeastSamplingEnabled = "sampling"
+
 
   /** Parse parameters into CassandraDataSourceOptions and TableRef object */
   def TableRefAndOptions(parameters: Map[String, String]) : (TableRef, CassandraSourceOptions) = {
@@ -127,6 +130,9 @@ object DefaultSource {
     val pushdown : Boolean = parameters.getOrElse(CassandraDataSourcePushdownEnableProperty, "true").toBoolean
     val confirmTruncate : Boolean = parameters.getOrElse(CassandraDataSourceConfirmTruncateProperty, "false").toBoolean
     val cassandraConfs = parameters
+
+    //QBEAST
+    //val sampling : Double = parameters.getOrElse(CassandraQbeastSamplingEnabled, "1.0").toDouble
 
     (TableRef(tableName, keyspaceName, clusterName), CassandraSourceOptions(pushdown, confirmTruncate, cassandraConfs))
   }
