@@ -49,15 +49,24 @@ private[cassandra] class CassandraSourceRelation(
   extends BaseRelation
   with InsertableRelation
   with PrunedFilteredScan
-  with Logging
-  with PushDownSampling {
-
-  private var sampleFraction = 1.0
+  with PushDownSampling
+  with Logging {
 
   private[this] val tableDef = Schema.tableFromCassandra(
     connector,
     tableRef.keyspace,
     tableRef.table)
+
+
+  //QUAKE
+  private[this] var sampleFraction = Double.MaxValue
+
+
+  override def pushSampling(sample: Sample): Boolean = {
+    sampleFraction = sample.fraction
+    sampling
+  }
+
 
   override def schema: StructType = {
     userSpecifiedSchema.getOrElse(StructType(tableDef.columns.map(toStructField)))
@@ -134,8 +143,9 @@ private[cassandra] class CassandraSourceRelation(
     val bcpp = new BasicCassandraPredicatePushDown(filters.toSet, tableDef, pv)
 
     //QUAKE
-    //predicatesToPushdown must contain queries with qbeast indexes
-
+    if(bcpp.qbeastPredicatesToPushdown.nonEmpty) {
+      sampleFraction = 1.0
+    }
     val basicPushdown = AnalyzedPredicates(bcpp.predicatesToPushDown, bcpp.predicatesToPreserve)
     logDebug(s"Basic Rules Applied:\n$basicPushdown")
 
@@ -158,15 +168,21 @@ private[cassandra] class CassandraSourceRelation(
     val filteredRdd = {
       if(filterPushdown) {
         val pushdownFilters = predicatePushDown(filters).handledByCassandra.toArray
-        val maybePushdown = maybePushdownFilters(baseRdd, pushdownFilters)
-        maybeSampling(maybePushdown)
+        //QUAKE
+        val pushdownRdd = maybePushdownFilters(baseRdd, pushdownFilters)
+        if(sampling) {
+          maybeSampling(pushdownRdd)
+        }
+        else{
+          pushdownRdd
+        }
+
       } else {
         baseRdd
       }
     }
     maybeSelect(filteredRdd, requiredColumns)
   }
-
 
   /** Define a type for CassandraRDD[CassandraSQLRow]. It's used by following methods */
   private type RDDType = CassandraRDD[CassandraSQLRow]
@@ -196,41 +212,26 @@ private[cassandra] class CassandraSourceRelation(
     }
   }
 
-  //QUAKE
-  //we have to implement the (void, for now) method on the V2 API source
-  override def pushSampling(sample: Sample): Boolean = {
-    sampleFraction = sample.fraction
-    sampling
-
-  }
-
 
   //QUAKE
-  //here is where the expression is added to the where clause for sampling pourposes
+
   private def maybeSampling(rdd: RDDType): RDDType = {
-    if (sampling) {
-      val index = tableDef.indexes.filter(_.className.contains("Qbeast"))
 
-      if(index.nonEmpty && sampleFraction!=1.0) {
-        val finalcql = s"""expr(${index.head.indexName}, """ +
-          s"""'precision=${sampleFraction}:${scala.util.Random.nextDouble()}')"""
+    val index = tableDef.indexes.filter(_.className.contains("Qbeast"))
+    if (index.nonEmpty && sampleFraction != Double.MaxValue) {
+      val date = System.currentTimeMillis
+      val finalcql =
+        s"""expr(${index.head.indexName}, """ +
+          s"""'precision=$sampleFraction:""" +
+          s"""${date}')"""
 
-        val columns = tableDef.qbeastColumns.distinct
-        val filters = columns.map(c => s"""${c.columnName} >= 0 AND ${c.columnName} < ${Int.MaxValue}""")
-          .reduce(_ + s""" AND """ + _)
-
-        rdd.where(filters).where(finalcql)
-
-      }
-      else {
-        rdd
-      }
+        rdd.where(finalcql)
     }
-
     else {
       rdd
     }
   }
+
 
 
   /** Construct Cql clause and retrieve the values from filter */
